@@ -4,6 +4,7 @@ import algorithms.MergeSort;
 import algorithms.QuickSelect;
 import algorithms.QuickSort;
 import utils.Metrics;
+
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
@@ -11,207 +12,193 @@ import java.util.Random;
 
 public class BenchmarkRunner {
     private static final int[] SIZES = {
-            1_000,
-            10_000,
-            100_000,
-            1_000_000
+            1_000, 10_000, 100_000, 1_000_000
     };
 
     private static final String[] TYPES = {
-            "random",
-            "sorted",
-            "duplicates"
+            "random", "sorted", "duplicates"
     };
 
+    private static final String[] ALGORITHMS = {
+            "MergeSort", "QuickSort", "QuickSelect"
+    };
+
+    private static final int WARMUP_RUNS = 5;
     private static final int RUNS = 5;
 
-    public static void main(String[] args) {
-        String fileName = "results.csv";
-        try (FileWriter writer = new FileWriter(fileName)) {
-            writer.write("algorithm,n,input_type,time_ms,comparisons,max_depth\n");
+    public static void main(String[] args) throws IOException {
+        try (
+                FileWriter summary = new FileWriter("results.csv");
+                FileWriter raw = new FileWriter("results_raw.csv");
+                FileWriter environment =
+                        new FileWriter("benchmark_environment.txt")
+        ) {
+            summary.write(
+                    "algorithm,n,input_type,time_ms,"
+                            + "comparisons,max_depth,iterations\n"
+            );
+
+            raw.write(
+                    "algorithm,n,input_type,run,time_ns,"
+                            + "comparisons,max_depth,iterations\n"
+            );
+
+            environment.write(
+                    "Measured at: " + java.time.Instant.now() + "\n"
+                            + "Java: " + System.getProperty("java.version") + "\n"
+                            + "VM: " + System.getProperty("java.vm.name") + "\n"
+                            + "OS: " + System.getProperty("os.name") + " "
+                            + System.getProperty("os.version") + " "
+                            + System.getProperty("os.arch") + "\n"
+                            + "Warmup runs per case: " + WARMUP_RUNS + "\n"
+                            + "Measured runs per case: " + RUNS + "\n"
+                            + "Input seed: 42; pivot seeds: not fixed\n"
+                            + "Summary: independent median of each metric\n"
+            );
 
             for (int n : SIZES) {
                 for (String type : TYPES) {
-                    System.out.println("\nRunning n = " + n + ", type = " + type);
                     int[] original = createArray(n, type);
 
-                    runMergeSort(original, n, type, writer);
-                    runQuickSort(original, n, type, writer);
-                    runQuickSelect(original, n, type, writer);
+                    int[] expected = original.clone();
+                    Arrays.sort(expected);
+
+                    for (String algorithm : ALGORITHMS) {
+                        runCase(
+                                algorithm,
+                                original,
+                                expected,
+                                type,
+                                summary,
+                                raw
+                        );
+                    }
                 }
             }
-            System.out.println("\nBenchmark finished.");
-            System.out.println("Results saved to " + fileName);
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+
+        System.out.println(
+                "Saved results.csv, results_raw.csv "
+                        + "and benchmark_environment.txt"
+        );
     }
-    private static int[] createArray(
-            int n,
-            String type
-    ) {
+
+    private static int[] createArray(int n, String type) {
         int[] array = new int[n];
         Random random = new Random(42);
-        if (type.equals("random")) {
-            for (int i = 0; i < n; i++) {
-                array[i] = random.nextInt(n);
-            }
-        } else if (type.equals("sorted")) {
-            for (int i = 0; i < n; i++) {
-                array[i] = i;
-            }
 
-        } else if (type.equals("duplicates")) {
-            for (int i = 0; i < n; i++) {
-                array[i] = random.nextInt(10);
-            }
+        for (int i = 0; i < n; i++) {
+            array[i] = switch (type) {
+                case "random" -> random.nextInt(n);
+                case "sorted" -> i;
+                case "duplicates" -> random.nextInt(10);
+                default -> throw new IllegalArgumentException(
+                        "Unknown input type: " + type
+                );
+            };
         }
+
         return array;
     }
-    private static void runMergeSort(
-            int[] original,
-            int n,
-            String type,
-            FileWriter writer
-    ) throws IOException {
 
-        long[] times = new long[RUNS];
-        long bestComparisons = 0;
-        int bestDepth = 0;
+    private static int execute(
+            String algorithm,
+            int[] array,
+            Metrics metrics
+    ) {
+        switch (algorithm) {
+            case "MergeSort":
+                MergeSort.sort(array, metrics);
+                return 0;
 
-        MergeSort.sort(original.clone(), new Metrics());
-        for (int run = 0; run < RUNS; run++) {
-            int[] array = original.clone();
-            Metrics metrics = new Metrics();
+            case "QuickSort":
+                QuickSort.sort(array, metrics);
+                return 0;
 
-            long start = System.nanoTime();
+            case "QuickSelect":
+                return QuickSelect.select(
+                        array, array.length / 2, metrics
+                );
 
-            MergeSort.sort(array, metrics);
-
-            long end = System.nanoTime();
-            times[run] = end - start;
-            bestComparisons = metrics.getComparisons();
-            bestDepth = metrics.getMaxDepth();
+            default:
+                throw new IllegalArgumentException(
+                        "Unknown algorithm: " + algorithm
+                );
         }
-        long median = calculateMedian(times);
-        writeResult(
-                writer,
-                "MergeSort",
-                n,
-                type,
-                median,
-                bestComparisons,
-                bestDepth
-        );
     }
-    private static void runQuickSort(
+
+    private static void runCase(
+            String algorithm,
             int[] original,
-            int n,
+            int[] expected,
             String type,
-            FileWriter writer
+            FileWriter summary,
+            FileWriter raw
     ) throws IOException {
+        int n = original.length;
+
         long[] times = new long[RUNS];
+        long[] comparisons = new long[RUNS];
+        long[] depths = new long[RUNS];
+        long[] iterations = new long[RUNS];
 
-        long comparisons = 0;
-        int depth = 0;
-
-        QuickSort.sort(original.clone(), new Metrics());
-        for (int run = 0; run < RUNS; run++) {
-            int[] array = original.clone();
-            Metrics metrics = new Metrics();
-
-            long start = System.nanoTime();
-            QuickSort.sort(array, metrics);
-            long end = System.nanoTime();
-            times[run] = end - start;
-            comparisons = metrics.getComparisons();
-            depth = metrics.getMaxDepth();
+     
+        for (int run = 0; run < WARMUP_RUNS; run++) {
+            execute(algorithm, original.clone(), new Metrics());
         }
-        long median = calculateMedian(times);
-        writeResult(
-                writer,
-                "QuickSort",
-                n,
-                type,
-                median,
-                comparisons,
-                depth
-        );
-    }
-    private static void runQuickSelect(
-            int[] original,
-            int n,
-            String type,
-            FileWriter writer
-    ) throws IOException {
-
-        long[] times = new long[RUNS];
-        long comparisons = 0;
-        int depth = 0;
-        int k = n / 2;
-
-        QuickSelect.select(original.clone(), k, new Metrics());
 
         for (int run = 0; run < RUNS; run++) {
             int[] array = original.clone();
             Metrics metrics = new Metrics();
+
             long start = System.nanoTime();
-            int result = QuickSelect.select(array, k, metrics);
-            long end = System.nanoTime();
-            times[run] = end - start;
-            comparisons = metrics.getComparisons();
-            depth = metrics.getMaxDepth();
+            int result = execute(algorithm, array, metrics);
+            times[run] = System.nanoTime() - start;
+
+            comparisons[run] = metrics.getComparisons();
+            depths[run] = metrics.getMaxDepth();
+            iterations[run] = metrics.getIterations();
 
 
-            int[] expected = original.clone();
-            Arrays.sort(expected);
-            if (result != expected[k]) {
-                throw new IllegalStateException("QuickSelect returned wrong result");
+            boolean correct = algorithm.equals("QuickSelect")
+                    ? result == expected[n / 2]
+                    : Arrays.equals(array, expected);
+
+            if (!correct) {
+                throw new IllegalStateException(
+                        algorithm + " returned wrong result"
+                );
             }
+
+            raw.write(
+                    algorithm + "," + n + "," + type + ","
+                            + (run + 1) + ","
+                            + times[run] + ","
+                            + comparisons[run] + ","
+                            + depths[run] + ","
+                            + iterations[run] + "\n"
+            );
         }
-        long median = calculateMedian(times);
-        writeResult(
-                writer,
-                "QuickSelect",
-                n,
-                type,
-                median,
-                comparisons,
-                depth
+
+
+        summary.write(
+                algorithm + "," + n + "," + type + ","
+                        + calculateMedian(times) / 1_000_000.0 + ","
+                        + calculateMedian(comparisons) + ","
+                        + calculateMedian(depths) + ","
+                        + calculateMedian(iterations) + "\n"
+        );
+
+        System.out.println(
+                algorithm + " | n=" + n + " | " + type
+                        + " | verified " + RUNS + " runs"
         );
     }
+
     private static long calculateMedian(long[] values) {
         long[] sorted = values.clone();
         Arrays.sort(sorted);
-        return sorted[sorted.length / 2];
-    }
-    private static void writeResult(
-            FileWriter writer,
-            String algorithm,
-            int n,
-            String type,
-            long timeNs,
-            long comparisons,
-            int depth
-    ) throws IOException {
-        double timeMs = timeNs / 1_000_000.0;
 
-        writer.write(
-                algorithm + "," +
-                        n + "," +
-                        type + "," +
-                        timeMs + "," +
-                        comparisons + "," +
-                        depth +
-                        "\n"
-        );
-        System.out.printf("%s | n=%d | %s | %.4f ms | comparisons=%d | depth=%d%n",
-                algorithm,
-                n,
-                type,
-                timeMs,
-                comparisons,
-                depth
-        );
+        return sorted[sorted.length / 2];
     }
 }

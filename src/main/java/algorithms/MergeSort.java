@@ -136,30 +136,22 @@ public class MergeSort {
             int left,
             int right,
             Metrics metrics
-    ){
-
-        for(int i = left + 1; i <= right; i++){
-
+    ) {
+        for (int i = left + 1; i <= right; i++) {
             int key = array[i];
-
             int j = i - 1;
 
-
-            while(j >= left && array[j] > key){
-
+            while (j >= left) {
                 metrics.addComparison();
 
+                if (array[j] <= key) {
+                    break;
+                }
+
                 array[j + 1] = array[j];
-
                 j--;
-
             }
 
-
             array[j + 1] = key;
-
         }
-
-    }
-
-    }
+    }    }

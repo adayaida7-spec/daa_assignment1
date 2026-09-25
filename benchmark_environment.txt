@@ -1,0 +1,8 @@
+Measured at: 2026-09-25T13:02:43.170702Z
+Java: 17.0.17
+VM: OpenJDK 64-Bit Server VM
+OS: Mac OS X 15.6.1 aarch64
+Warmup runs per case: 5
+Measured runs per case: 5
+Input seed: 42; pivot seeds: not fixed
+Summary: independent median of each metric

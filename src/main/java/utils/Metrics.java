@@ -1,49 +1,58 @@
 package utils;
 
-public class Metrics  {
+public class Metrics {
     private long comparisons;
-    private int maxDepth ;
+    private int maxDepth;
+    private int iterations;
     private long startTime;
     private long endTime;
-    public Metrics()  {
-        comparisons = 0;
-        maxDepth = 0;
-        startTime = 0;
-        endTime = 0;
+
+    public Metrics() {
+        reset();
     }
+
     public void addComparison() {
-        comparisons++ ;
+        comparisons++;
     }
 
     public long getComparisons() {
         return comparisons;
     }
 
-    public void  updateDepth(int depth) {
-        if (depth >  maxDepth) {
+    public void updateDepth(int depth) {
+        if (depth > maxDepth) {
             maxDepth = depth;
         }
     }
 
-    public int  getMaxDepth() {
+    public int getMaxDepth() {
         return maxDepth;
     }
 
-    public void startTimer()  {
+    public void addIteration() {
+        iterations++;
+    }
+
+    public int getIterations() {
+        return iterations;
+    }
+
+    public void startTimer() {
         startTime = System.nanoTime();
     }
 
     public void stopTimer() {
-        endTime =  System.nanoTime();
-     }
+        endTime = System.nanoTime();
+    }
 
-    public long  getTime() {
+    public long getTime() {
         return endTime - startTime;
     }
 
-    public  void reset() {
-        comparisons =  0;
+    public void reset() {
+        comparisons = 0;
         maxDepth = 0;
+        iterations = 0;
         startTime = 0;
         endTime = 0;
     }

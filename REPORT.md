@@ -76,31 +76,29 @@ The maximum recursion depth of QuickSort stayed below the required limit for n =
 
 ### 4.1 Execution Time
 
-![Execution time for random data](plots/time_vs_n_random.png)
+Each figure includes random, sorted, and duplicate-heavy inputs.
 
-![Execution time for sorted data](plots/time_vs_n_sorted.png)
+![Execution time](plots/01_time.png)
 
-![Execution time for duplicate data](plots/time_vs_n_duplicates.png)
+### 4.2 Recursion Depth and Partition Iterations
 
-### 4.2 Recursion Depth
+Maximum recursion depth for MergeSort and QuickSort:
 
-![Recursion depth for random data](plots/depth_vs_n_random.png)
+![Recursion depth](plots/02_stack_depth.png)
 
-![Recursion depth for sorted data](plots/depth_vs_n_sorted.png)
+QuickSelect is iterative, so the following graph shows partition iterations rather than recursion depth:
 
-![Recursion depth for duplicate data](plots/depth_vs_n_duplicates.png)
+![QuickSelect partition iterations](plots/03_selection_iterations.png)
 
 ### 4.3 Ratio Analysis
 
-For MergeSort and QuickSort, the ratio was calculated as: comparisons / (n × log₂(n))
+For MergeSort and QuickSort, the ratio was calculated as: comparisons / (n × log₂(n)).
 
-For QuickSelect, the ratio was calculated as: comparisons / n
+![Sorting comparison ratios](plots/04_sort_comparisons.png)
 
-![Ratio for random data](plots/ratio_vs_n_random.png)
+For QuickSelect, the ratio was calculated as: comparisons / n.
 
-![Ratio for sorted data](plots/ratio_vs_n_sorted.png)
-
-![Ratio for duplicate data](plots/ratio_vs_n_duplicates.png)
+![QuickSelect comparison ratio](plots/05_select_comparisons.png)
 
 ## 5. Discussion
 

@@ -1,152 +1,176 @@
 
+from pathlib import Path
 import csv
-import os
 import math
 
+import matplotlib
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
-INPUT_FILE = "results.csv"
-OUTPUT_DIR = "plots"
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent
+OUTPUT_DIR = BASE_DIR / "plots"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-data = []
-with open(INPUT_FILE, "r") as file:
-    reader = csv.DictReader(file)
-    for row in reader:
-        data.append({
-            "algorithm": row["algorithm"],
-            "n": int(row["n"]),
-            "input_type": row["input_type"],
-            "time_ms": float(row["time_ms"]),
-            "comparisons": int(row["comparisons"]),
-            "max_depth": int(row["max_depth"])
-        })
-algorithms = ["MergeSort", "QuickSort", "QuickSelect"]
-input_types = [ "random",  "sorted","duplicates"]
+with (BASE_DIR / "results.csv").open(
+    encoding="utf-8", newline=""
+) as file:
+    rows = list(csv.DictReader(file))
 
- # график времени выполнения
-for input_type in input_types:
-    plt.figure()
-    for algorithm in algorithms:
-        rows = [
-            row for row in data
-            if row["algorithm"] == algorithm
-            and row["input_type"] == input_type
-        ]
-        rows.sort(key=lambda x: x["n"])
-        x = [row["n"] for row in rows]
-        y = [row["time_ms"] for row in rows]
-        plt.plot( x, y, marker="o", label=algorithm )
+assert len(rows) == 36
+assert len({
+    (row["algorithm"], row["input_type"], row["n"])
+    for row in rows
+}) == 36
 
-    plt.xlabel("Размер входных данных (n)")
-    plt.ylabel("Время выполнения (мс)")
-    plt.title( "Время выполнения - " + input_type)
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(
-        os.path.join( OUTPUT_DIR, "time_vs_n_" + input_type + ".png" ) )
+ALGORITHMS = ["MergeSort", "QuickSort", "QuickSelect"]
 
-    plt.close()
+COLORS = {
+    "MergeSort": "#2474b5",
+    "QuickSort": "#d8660d",
+    "QuickSelect": "#248d53",
+}
 
-# график рекурсии
+INPUT_TYPES = [
+    ("random", "Случайные значения"),
+    ("sorted", "Отсортированный массив"),
+    ("duplicates", "Повторы: значения 0–9"),
+]
 
-for input_type in input_types:
-    plt.figure()
-    for algorithm in algorithms:
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+})
 
-        rows = [
-            row for row in data
-            if row["algorithm"] == algorithm
-            and row["input_type"] == input_type
-        ]
-        rows.sort(key=lambda x: x["n"])
-        x = [row["n"] for row in rows]
-        y = [row["max_depth"] for row in rows]
-        plt.plot( x,y, marker="o", label=algorithm )
+PLOTS = [
+    (
+        "01_time",
+        "Время выполнения: медиана 5 запусков",
+        ALGORITHMS,
+        lambda row: float(row["time_ms"]),
+        "Время, мс",
+        True,
+    ),
+    (
+        "02_stack_depth",
+        "Медиана максимальной глубины рекурсивных вызовов",
+        ["MergeSort", "QuickSort"],
+        lambda row: int(row["max_depth"]),
+        "Максимальная глубина",
+        False,
+    ),
+    (
+        "03_selection_iterations",
+        "QuickSelect: медиана числа итераций разбиения",
+        ["QuickSelect"],
+        lambda row: int(row["iterations"]),
+        "Итерации, не глубина стека",
+        False,
+    ),
+    (
+        "04_sort_comparisons",
+        "Сортировки: нормированное число сравнений",
+        ["MergeSort", "QuickSort"],
+        lambda row: int(row["comparisons"]) / (
+            int(row["n"]) * math.log2(int(row["n"]))
+        ),
+        "C / (n · log₂ n)",
+        False,
+    ),
+    (
+        "05_select_comparisons",
+        "QuickSelect: нормированное число сравнений",
+        ["QuickSelect"],
+        lambda row: int(row["comparisons"]) / int(row["n"]),
+        "C / n",
+        False,
+    ),
+]
 
-    plt.xlabel("Размер входных данных (n)")
-    plt.ylabel("Максимальная глубина рекурсии")
-    plt.title( "Глубина рекурсии - " + input_type )
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
+for name, title, algorithms, get_value, ylabel, log_y in PLOTS:
+    figure, axes = plt.subplots(1, 3, figsize=(15, 4.6))
 
-    plt.savefig(
-        os.path.join(
-            OUTPUT_DIR,
-            "depth_vs_n_" + input_type + ".png"
+    for axis, (input_type, input_title) in zip(axes, INPUT_TYPES):
+        for algorithm in algorithms:
+            selected = sorted(
+                [
+                    row for row in rows
+                    if row["algorithm"] == algorithm
+                    and row["input_type"] == input_type
+                ],
+                key=lambda row: int(row["n"]),
+            )
+
+            x = [int(row["n"]) for row in selected]
+            y = [get_value(row) for row in selected]
+
+            axis.plot(
+                x,
+                y,
+                "o-",
+                color=COLORS[algorithm],
+                label=algorithm,
+                linewidth=2,
+            )
+
+            if len(algorithms) == 1:
+                for x_value, y_value in zip(x, y):
+                    label = (
+                        f"{y_value:.2f}"
+                        if "comparisons" in name
+                        else str(int(y_value))
+                    )
+
+                    axis.annotate(
+                        label,
+                        (x_value, y_value),
+                        xytext=(0, 8),
+                        textcoords="offset points",
+                        ha="center",
+                        fontsize=9,
+                    )
+
+        axis.set_xscale("log")
+        axis.set_xticks(
+            [1_000, 10_000, 100_000, 1_000_000],
+            ["1 000", "10 000", "100 000", "1 000 000"],
         )
+
+        if log_y:
+            axis.set_yscale("log")
+        else:
+            maximum = max(
+                max(line.get_ydata()) for line in axis.lines
+            )
+            axis.set_ylim(0, maximum * 1.22)
+
+        if "depth" in name or "iterations" in name:
+            axis.yaxis.set_major_locator(
+                MaxNLocator(integer=True)
+            )
+
+        axis.set_title(input_title)
+        axis.set_xlabel("Размер массива n")
+        axis.set_ylabel(ylabel)
+        axis.grid(alpha=0.25)
+        axis.legend(fontsize=9)
+
+    figure.suptitle(title, fontsize=15)
+
+    figure.text(
+        0.5,
+        0.025,
+        "Источник: results.csv. Каждая метрика — отдельная "
+        "медиана 5 запусков после 5 прогревов.",
+        ha="center",
+        fontsize=8,
     )
-    plt.close()
 
-# график количество сравнений
+    figure.tight_layout(rect=(0, 0.07, 1, 0.94))
+    figure.savefig(OUTPUT_DIR / f"{name}.png", dpi=160)
+    plt.close(figure)
 
-for input_type in input_types:
-    plt.figure()
-    for algorithm in algorithms:
-        rows = [
-            row for row in data
-            if row["algorithm"] == algorithm
-            and row["input_type"] == input_type
-        ]
-
-        rows.sort(key=lambda x: x["n"])
-
-        x = []
-        ratios = []
-        for row in rows:
-
-            n = row["n"]
-            comparisons = row["comparisons"]
-
-            x.append(n)
-
-            if algorithm == "QuickSelect":
-
-                ratio = comparisons / n
-            else:
-                ratio = comparisons / (
-                    n * math.log2(n)
-                )
-
-            ratios.append(ratio)
-        print(
-            algorithm,
-            input_type,
-            "x =", len(x),
-            "ratios =", len(ratios)
-        )
-
-
-        plt.plot(
-            x,
-            ratios,
-            marker="o",
-            label=algorithm
-        )
-
-
-    plt.xlabel("Размер входных данных (n)")
-    plt.ylabel("Ratio")
-
-    plt.title(
-        "Проверка теоретической границы - "
-        + input_type
-    )
-
-    plt.legend()
-    plt.grid(True)
-
-    plt.tight_layout()
-
-    plt.savefig(
-        os.path.join(
-            OUTPUT_DIR,
-            "ratio_vs_n_" + input_type + ".png"
-        )
-    )
-
-    plt.close()
-print("Все графики успешно созданы.")
+print("Созданы 5 графиков по данным results.csv.")
